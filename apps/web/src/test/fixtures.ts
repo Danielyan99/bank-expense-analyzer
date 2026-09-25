@@ -34,7 +34,8 @@ export function analysis(transactions: Transaction[]): AnalysisResult {
       unresolved: transactions.filter((t) => t.source === 'none').length,
       merchantsSentToAi: 1,
       aiStatus: 'ok',
-      aiModel: 'claude-opus-5',
+      aiProvider: 'gemini',
+      aiModel: 'gemini-3.5-flash',
       durationMs: { parse: 2, rules: 3, ai: 1800 },
     },
   };

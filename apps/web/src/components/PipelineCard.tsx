@@ -9,11 +9,13 @@ interface Props {
   onReview: () => void;
 }
 
+const PROVIDER_NAME = { gemini: 'Gemini', claude: 'Claude' } as const;
+
 const AI_NOTE: Record<AnalysisResult['pipeline']['aiStatus'], string> = {
   ok: '',
-  'not-needed': 'The rules settled everything, so Claude was not called.',
-  disabled: 'Claude is switched off on this server, so the leftovers are yours to sort.',
-  error: 'The Claude call failed, so the leftovers stay uncategorized.',
+  'not-needed': 'The rules settled everything, so the AI was not called.',
+  disabled: 'The AI step is switched off on this server, so the leftovers are yours to sort.',
+  error: 'The AI call failed, so the leftovers stay uncategorized.',
 };
 
 /**
@@ -31,7 +33,7 @@ export function PipelineCard({ result, transactions, manualCount, onReview }: Pr
   };
   const segments = [
     { key: 'rule', label: 'Rules', count: now.rule, className: 'bg-accent' },
-    { key: 'ai', label: 'Claude', count: now.ai, className: 'bg-ai' },
+    { key: 'ai', label: 'AI', count: now.ai, className: 'bg-ai' },
     { key: 'manual', label: 'You', count: now.manual, className: 'bg-ink' },
     { key: 'none', label: 'Not sorted', count: now.none, className: 'hatched bg-raised' },
   ].filter((s) => s.count > 0);
@@ -46,7 +48,7 @@ export function PipelineCard({ result, transactions, manualCount, onReview }: Pr
         </h2>
         <p className="font-mono text-xs text-ink-faint">
           parse {formatDuration(pipeline.durationMs.parse)} · rules {formatDuration(pipeline.durationMs.rules)}
-          {pipeline.merchantsSentToAi > 0 && ` · Claude ${formatDuration(pipeline.durationMs.ai)}`}
+          {pipeline.merchantsSentToAi > 0 && ` · AI ${formatDuration(pipeline.durationMs.ai)}`}
         </p>
       </div>
 
@@ -59,7 +61,7 @@ export function PipelineCard({ result, transactions, manualCount, onReview }: Pr
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
         <Stat label="Rules" swatch="bg-accent" value={now.rule} total={total} hint={`of ${total} transactions`} />
         <Stat
-          label="Claude"
+          label={pipeline.aiProvider ? `AI · ${PROVIDER_NAME[pipeline.aiProvider]}` : 'AI'}
           swatch="bg-ai"
           value={now.ai}
           total={total}

@@ -1,5 +1,8 @@
 import type { CategoryId } from './categories';
 
+/** Which AI provider answered. Gemini runs the free demo; Claude is supported. */
+export type AiProvider = 'gemini' | 'claude';
+
 /** Who decided a transaction's category. */
 export type CategorySource = 'rule' | 'ai' | 'manual' | 'none';
 
@@ -19,7 +22,7 @@ export interface Transaction {
   confidence: number;
   /** Rule that matched (source "rule"). */
   ruleId?: string;
-  /** Claude's one-line reason (source "ai"). */
+  /** The AI's one-line reason (source "ai"). */
   aiReason?: string;
   /** Same merchant, similar amount, roughly monthly. */
   recurring?: boolean;
@@ -35,9 +38,9 @@ export interface ParseReport {
 }
 
 export type AiStatus =
-  /** Claude classified the leftovers. */
+  /** The AI classified the leftovers. */
   | 'ok'
-  /** Nothing was left for Claude after the rules. */
+  /** Nothing was left for the AI after the rules. */
   | 'not-needed'
   /** No API key configured on the server. */
   | 'disabled'
@@ -49,9 +52,10 @@ export interface PipelineReport {
   byRules: number;
   byAi: number;
   unresolved: number;
-  /** Distinct merchants that were sent to Claude (duplicates are sent once). */
+  /** Distinct merchants that were sent to the AI (duplicates are sent once). */
   merchantsSentToAi: number;
   aiStatus: AiStatus;
+  aiProvider?: AiProvider;
   aiModel?: string;
   aiMessage?: string;
   durationMs: { parse: number; rules: number; ai: number };

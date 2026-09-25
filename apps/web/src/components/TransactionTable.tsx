@@ -9,14 +9,14 @@ export type SourceFilter = 'all' | 'rule' | 'ai' | 'manual' | 'review';
 const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'rule', label: 'Rules' },
-  { id: 'ai', label: 'Claude' },
+  { id: 'ai', label: 'AI' },
   { id: 'manual', label: 'You' },
   { id: 'review', label: 'Needs review' },
 ];
 
 const PAGE = 50;
 
-/** Unsorted rows, plus AI answers Claude itself was unsure about. */
+/** Unsorted rows, plus answers the AI itself was unsure about. */
 export function needsReview(tx: Transaction): boolean {
   return tx.source === 'none' || (tx.source === 'ai' && tx.confidence < 0.7);
 }
@@ -224,7 +224,7 @@ function SourceBadge({ tx, changed }: { tx: Transaction; changed: boolean }) {
     manual: 'border-ink/40 text-ink',
     none: 'border-dashed border-ink-faint text-ink-muted',
   } as const;
-  const label = { rule: 'Rule', ai: 'Claude', manual: 'You', none: 'Not sorted' }[tx.source];
+  const label = { rule: 'Rule', ai: 'AI', manual: 'You', none: 'Not sorted' }[tx.source];
   const detail =
     tx.source === 'rule'
       ? describeRule(tx.ruleId)

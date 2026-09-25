@@ -1,4 +1,4 @@
-# Render Blueprint for the API. The web app is deployed separately on Vercel (apps/web/vercel.json).
+# Render Blueprint for the API (free plan). The web app is deployed separately on Vercel (apps/web/vercel.json).
 services:
   - type: web
     name: ledgerlens-api
@@ -10,11 +10,13 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # Set in the Render dashboard. Without it the app still works, rules only.
-      - key: ANTHROPIC_API_KEY
+      # Free key from https://aistudio.google.com (Get API key). Without it the app still works, rules only.
+      - key: GEMINI_API_KEY
         sync: false
       # The Vercel URL of the web app, e.g. https://ledgerlens.vercel.app
       - key: CORS_ORIGIN
         sync: false
+      - key: AI_PROVIDER
+        value: gemini
       - key: RATE_LIMIT_PER_MINUTE
         value: "10"

@@ -30,7 +30,7 @@ export function Landing({ loading, error, server, onSample, onFile }: Props) {
         </h1>
         <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-muted text-pretty">
           Upload a bank statement CSV and get a spending dashboard. Plain rules categorize every transaction they
-          recognise. <span className="text-ink">Claude only sees the leftovers the rules can&apos;t place</span>, and
+          recognise. <span className="text-ink">An LLM only sees the leftovers the rules can&apos;t place</span>, and
           every row shows which of the two decided.
         </p>
       </section>
@@ -97,7 +97,7 @@ export function Landing({ loading, error, server, onSample, onFile }: Props) {
           />
           <p className="mt-4 max-w-sm rounded-lg bg-raised px-3 py-2 text-xs leading-relaxed text-ink-muted">
             This is a portfolio demo: please use the sample, not your real statement. Nothing is stored. Files are
-            processed in memory and dropped, and only merchant descriptions (with long numbers masked) go to Claude.
+            processed in memory and dropped. Only merchant descriptions (with long numbers masked) go to the AI: Google Gemini's free tier, where Google may use requests to improve its products.
           </p>
         </div>
       </section>
@@ -120,7 +120,7 @@ export function Landing({ loading, error, server, onSample, onFile }: Props) {
 }
 
 function Progress({ aiEnabled }: { aiEnabled: boolean }) {
-  const steps = ['Reading the CSV', 'Applying rules', aiEnabled ? 'Asking Claude about the leftovers' : 'Finishing up'];
+  const steps = ['Reading the CSV', 'Applying rules', aiEnabled ? 'Asking the AI about the leftovers' : 'Finishing up'];
   return (
     <ol className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
       {steps.map((step, i) => (
@@ -147,8 +147,8 @@ const STEPS = [
     file: 'apps/server/src/categorization/rules.ts',
   },
   {
-    title: 'Claude for the rest',
-    body: 'Only unknown merchants, each sent once, in one call with a strict JSON schema. "Unknown" is an allowed answer.',
+    title: 'AI for the rest',
+    body: 'Only unknown merchants, each sent once, in one call with a strict JSON schema. Gemini in this demo, Claude also supported. "Unknown" is allowed.',
     file: 'apps/server/src/categorization/ai-categorizer.service.ts',
   },
 ];

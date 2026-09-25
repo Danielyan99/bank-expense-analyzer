@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { AiCategorizerService } from './categorization/ai-categorizer.service';
 import { loadConfig } from './config/configuration';
 
 async function bootstrap() {
@@ -19,10 +20,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   await app.listen(config.port, '0.0.0.0');
-  Logger.log(
-    `Listening on :${config.port} · Claude ${config.anthropicApiKey ? `enabled (${config.aiModel})` : 'disabled'}`,
-    'Bootstrap',
-  );
+  Logger.log(`Listening on :${config.port} · AI ${app.get(AiCategorizerService).description}`, 'Bootstrap');
 }
 
 void bootstrap();

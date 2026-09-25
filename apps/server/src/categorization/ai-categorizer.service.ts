@@ -1,27 +1,14 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ASSIGNABLE_CATEGORIES, CATEGORY_INFO, type AiStatus, type CategoryId, type Transaction } from '@expense/shared';
-import { z } from 'zod';
-import { APP_CONFIG, type AppConfig } from '../config/configuration';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import type { AiProvider, AiStatus, CategoryId, Transaction } from '@expense/shared';
+import { AI_MODEL, type AiModel } from './ai/ai-model';
+import { buildUserMessage, SYSTEM_PROMPT, type AiItem } from './ai/prompt';
 import { redactForAi } from './merchant';
 
-/** One Claude call handles at most this many distinct merchants; the rest stay uncategorized. */
+/** One AI call handles at most this many distinct merchants; the rest stay uncategorized. */
 export const MAX_MERCHANTS_PER_CALL = 80;
 const CACHE_LIMIT = 5_000;
 
 const CONFIDENCE_SCORE = { high: 0.9, medium: 0.75, low: 0.55 } as const;
-
-const AiAnswer = z.object({
-  results: z.array(
-    z.object({
-      id: z.number().int(),
-      category: z.enum(['unknown', ...ASSIGNABLE_CATEGORIES] as [string, ...string[]]),
-      confidence: z.enum(['high', 'medium', 'low']),
-      reason: z.string(),
-    }),
-  ),
-});
 
 interface Verdict {
   category: CategoryId;
@@ -31,64 +18,51 @@ interface Verdict {
 
 export interface AiOutcome {
   status: AiStatus;
+  provider?: AiProvider;
   model?: string;
   message?: string;
   merchantsSent: number;
 }
 
-const SYSTEM_PROMPT = [
-  'You categorize bank transactions for a personal spending dashboard.',
-  'A rule engine has already handled every transaction it recognised. You only see the leftovers:',
-  'unusual merchants, cryptic descriptions, local businesses. Use what the name suggests (words like',
-  '"coffee", "dental", "florist", a person\'s name, a known brand) and the money direction.',
-  '',
-  'Categories:',
-  ...ASSIGNABLE_CATEGORIES.map((id) => `- ${id}: ${CATEGORY_INFO[id].label} (${CATEGORY_INFO[id].hint})`),
-  '- unknown: use this when the description gives no real clue. A wrong guess is worse than "unknown".',
-  '',
-  'Money in is usually income or transfers, unless it is clearly a refund from a merchant (then use the',
-  'merchant\'s category). Payments to or from a person\'s name are usually transfers.',
-  'For each item return its id, a category, your confidence, and a reason of at most 10 words.',
-].join('\n');
-
 /**
  * The AI step. Only transactions the rules could not settle reach this service, and each
  * distinct merchant is sent once. Only the (redacted) description and the money direction
- * leave the server: never amounts, dates or account details.
+ * leave the server: never amounts, dates or account details. The provider (Gemini or
+ * Claude) is injected, so this class does not know or care which one answers.
  */
 @Injectable()
 export class AiCategorizerService {
   private readonly logger = new Logger(AiCategorizerService.name);
-  private readonly client: Anthropic | undefined;
   /** "direction|merchant" -> verdict. Re-analyzing the sample statement costs no API calls. */
   private readonly cache = new Map<string, Verdict>();
 
-  constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {
-    this.client = config.anthropicApiKey
-      ? new Anthropic({ apiKey: config.anthropicApiKey, timeout: 60_000, maxRetries: 1 })
-      : undefined;
-  }
+  constructor(@Optional() @Inject(AI_MODEL) private readonly ai?: AiModel) {}
 
   get enabled(): boolean {
-    return this.client !== undefined;
+    return this.ai !== undefined;
+  }
+
+  get description(): string {
+    return this.ai ? `${this.ai.provider} (${this.ai.model})` : 'disabled';
   }
 
   /** Fills in category/source on the given transactions (mutates them). */
   async categorize(transactions: Transaction[]): Promise<AiOutcome> {
     if (transactions.length === 0) return { status: 'not-needed', merchantsSent: 0 };
-    if (!this.client) {
+    if (!this.ai) {
       return {
         status: 'disabled',
         merchantsSent: 0,
-        message: 'No Claude API key on this server, so the leftovers stay uncategorized.',
+        message: 'No AI key on this server, so the leftovers stay uncategorized.',
       };
     }
 
+    const { provider, model } = this.ai;
     const groups = groupByMerchant(transactions);
     const uncached = [...groups.keys()].filter((key) => !this.cache.has(key));
     const toSend = uncached.slice(0, MAX_MERCHANTS_PER_CALL);
 
-    let outcome: AiOutcome = { status: 'ok', model: this.config.aiModel, merchantsSent: toSend.length };
+    let outcome: AiOutcome = { status: 'ok', provider, model, merchantsSent: toSend.length };
     if (toSend.length > 0) {
       try {
         const verdicts = await this.ask(toSend.map((key) => groups.get(key)![0]));
@@ -97,12 +71,13 @@ export class AiCategorizerService {
           if (verdict) this.remember(key, verdict);
         });
       } catch (error) {
-        outcome = { status: 'error', model: this.config.aiModel, merchantsSent: toSend.length, message: describe(error) };
-        this.logger.warn(`Claude call failed: ${outcome.message}`);
+        const message = error instanceof Error ? error.message : 'Unknown error.';
+        outcome = { status: 'error', provider, model, merchantsSent: toSend.length, message };
+        this.logger.warn(`AI call failed: ${message}`);
       }
     }
     if (uncached.length > toSend.length) {
-      outcome.message = `Only the first ${MAX_MERCHANTS_PER_CALL} unknown merchants were sent to Claude.`;
+      outcome.message = `Only the first ${MAX_MERCHANTS_PER_CALL} unknown merchants were sent to the AI.`;
     }
 
     for (const [key, group] of groups) {
@@ -119,27 +94,14 @@ export class AiCategorizerService {
   }
 
   private async ask(items: Transaction[]): Promise<Map<number, Verdict>> {
-    const lines = items.map((tx, id) =>
-      JSON.stringify({
-        id,
-        description: redactForAi(tx.description),
-        direction: tx.amount < 0 ? 'money out' : 'money in',
-        ...(tx.recurring ? { pattern: 'charged monthly, same amount' } : {}),
-      }),
-    );
+    const payload: AiItem[] = items.map((tx, id) => ({
+      id,
+      description: redactForAi(tx.description),
+      direction: tx.amount < 0 ? 'money out' : 'money in',
+      ...(tx.recurring ? { pattern: 'charged monthly, same amount' } : {}),
+    }));
 
-    const response = await this.client!.messages.parse({
-      model: this.config.aiModel,
-      max_tokens: 8_000,
-      output_config: { effort: 'low', format: zodOutputFormat(AiAnswer) },
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `Categorize these transactions:\n${lines.join('\n')}` }],
-    });
-
-    if (response.stop_reason === 'refusal') throw new Error('Claude declined this request.');
-    if (response.stop_reason === 'max_tokens') throw new Error('Claude ran out of output tokens.');
-    const answer = response.parsed_output;
-    if (!answer) throw new Error('Claude returned an answer that did not match the schema.');
+    const answer = await this.ai!.classify(SYSTEM_PROMPT, buildUserMessage(payload));
 
     const verdicts = new Map<number, Verdict>();
     for (const r of answer.results) {
@@ -172,12 +134,4 @@ function groupByMerchant(transactions: Transaction[]): Map<string, Transaction[]
     groups.set(key, list);
   }
   return groups;
-}
-
-function describe(error: unknown): string {
-  if (error instanceof Anthropic.AuthenticationError) return 'The Claude API key was rejected.';
-  if (error instanceof Anthropic.RateLimitError) return 'Claude is rate-limited right now. Try again in a minute.';
-  if (error instanceof Anthropic.APIConnectionTimeoutError) return 'Claude took too long to answer.';
-  if (error instanceof Anthropic.APIError) return `Claude API error ${error.status ?? ''}`.trim() + '.';
-  return error instanceof Error ? error.message : 'Unknown error.';
 }

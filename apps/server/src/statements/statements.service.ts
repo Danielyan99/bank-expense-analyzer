@@ -6,7 +6,7 @@ import { parseStatementCsv } from '../parsing/csv-statement.parser';
 import { generateSampleCsv } from '../sample/sample-statement';
 
 /**
- * The pipeline: parse -> rules -> Claude (leftovers only). Stateless: nothing is stored,
+ * The pipeline: parse -> rules -> AI (leftovers only). Stateless: nothing is stored,
  * the result goes back to the browser and is forgotten.
  */
 @Injectable()
@@ -46,6 +46,7 @@ export class StatementsService {
         unresolved: transactions.length - byRules - byAi,
         merchantsSentToAi: outcome.merchantsSent,
         aiStatus: outcome.status,
+        aiProvider: outcome.provider,
         aiModel: outcome.model,
         aiMessage: outcome.message,
         durationMs: { parse: ms(t1 - t0), rules: ms(t2 - t1), ai: ms(t3 - t2) },

@@ -1,6 +1,8 @@
 import { Controller, DynamicModule, Get, Module } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AI_MODEL } from './categorization/ai/ai-model';
+import { createAiModel } from './categorization/ai/create-ai-model';
 import { AiCategorizerService } from './categorization/ai-categorizer.service';
 import { APP_CONFIG, type AppConfig } from './config/configuration';
 import { StatementsController } from './statements/statements.controller';
@@ -27,7 +29,12 @@ export class AppModule {
         ThrottlerModule.forRoot([{ ttl: 60_000, limit: config.rateLimitPerMinute }]),
       ],
       controllers: [HealthController, StatementsController],
-      providers: [{ provide: APP_CONFIG, useValue: config }, AiCategorizerService, StatementsService],
+      providers: [
+        { provide: APP_CONFIG, useValue: config },
+        { provide: AI_MODEL, useFactory: () => createAiModel(config) },
+        AiCategorizerService,
+        StatementsService,
+      ],
     };
   }
 }
