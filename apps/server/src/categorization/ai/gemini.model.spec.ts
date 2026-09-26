@@ -32,6 +32,39 @@ describe('GeminiModel', () => {
     expect(request.config.responseJsonSchema).not.toHaveProperty('$schema');
   });
 
+  it('keeps thinking low for Gemini 3 models', async () => {
+    const { model, generateContent } = withResponse({ text: VALID });
+    await model.classify('s', 'u');
+    const request = (generateContent.mock.calls[0] as unknown[])[0] as { config: { thinkingConfig?: { thinkingLevel: string } } };
+    // gemini-test is not a Gemini 3 model, so no thinking config is sent.
+    expect(request.config.thinkingConfig).toBeUndefined();
+
+    const three = new GeminiModel('k', 'gemini-3.5-flash');
+    const call = jest.fn(async () => ({ text: VALID }));
+    (three as unknown as { client: unknown }).client = { models: { generateContent: call } };
+    await three.classify('s', 'u');
+    expect(((call.mock.calls[0] as unknown[])[0] as { config: object }).config).toMatchObject({
+      thinkingConfig: { thinkingLevel: 'LOW' },
+    });
+  });
+
+  it('retries once when Google answers 5xx', async () => {
+    const model = new GeminiModel('k', 'gemini-test');
+    const generateContent = jest
+      .fn()
+      .mockRejectedValueOnce(new ApiError({ message: 'deadline', status: 504 }))
+      .mockResolvedValueOnce({ text: VALID });
+    (model as unknown as { client: unknown }).client = { models: { generateContent } };
+    await expect(model.classify('s', 'u')).resolves.toMatchObject({ results: [{ category: 'dining' }] });
+    expect(generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up after the retry fails too', async () => {
+    const { model, generateContent } = withResponse(new ApiError({ message: 'deadline', status: 504 }));
+    await expect(model.classify('s', 'u')).rejects.toThrow('Gemini API error 504.');
+    expect(generateContent).toHaveBeenCalledTimes(2);
+  });
+
   it('explains a used-up free quota', async () => {
     const { model } = withResponse(new ApiError({ message: 'quota', status: 429 }));
     await expect(model.classify('s', 'u')).rejects.toThrow('The free AI quota is used up for now. Try again later.');

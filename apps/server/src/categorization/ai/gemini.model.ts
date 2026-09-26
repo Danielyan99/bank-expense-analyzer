@@ -1,4 +1,4 @@
-import { ApiError, GoogleGenAI } from '@google/genai';
+import { ApiError, GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { z } from 'zod';
 import { AiModelError, type AiModel } from './ai-model';
 import { AiAnswer } from './prompt';
@@ -16,30 +16,41 @@ export class GeminiModel implements AiModel {
     apiKey: string,
     readonly model: string,
   ) {
-    this.client = new GoogleGenAI({ apiKey, httpOptions: { timeout: 60_000 } });
+    this.client = new GoogleGenAI({ apiKey, httpOptions: { timeout: 40_000 } });
   }
 
   async classify(system: string, user: string): Promise<AiAnswer> {
     let text: string | undefined;
     try {
-      const response = await this.client.models.generateContent({
-        model: this.model,
-        contents: user,
-        config: {
-          systemInstruction: system,
-          responseMimeType: 'application/json',
-          responseJsonSchema: ANSWER_JSON_SCHEMA,
-          temperature: 0,
-        },
-      });
-      if (response.promptFeedback?.blockReason) throw new AiModelError('Gemini declined this request.');
-      const finish = response.candidates?.[0]?.finishReason;
-      if (finish === 'MAX_TOKENS') throw new AiModelError('Gemini ran out of output tokens.');
-      text = response.text;
+      text = await this.request(system, user);
     } catch (error) {
-      throw toModelError(error);
+      // Google's free tier sometimes answers 5xx under load; one retry usually succeeds.
+      if (!(error instanceof ApiError && error.status >= 500)) throw toModelError(error);
+      try {
+        text = await this.request(system, user);
+      } catch (retryError) {
+        throw toModelError(retryError);
+      }
     }
     return parseAnswer(text);
+  }
+
+  private async request(system: string, user: string): Promise<string | undefined> {
+    const response = await this.client.models.generateContent({
+      model: this.model,
+      contents: user,
+      config: {
+        systemInstruction: system,
+        responseMimeType: 'application/json',
+        responseJsonSchema: ANSWER_JSON_SCHEMA,
+        temperature: 0,
+        // Sorting merchant names needs little reasoning; long thinking made requests time out.
+        ...(this.model.startsWith('gemini-3') ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+      },
+    });
+    if (response.promptFeedback?.blockReason) throw new AiModelError('Gemini declined this request.');
+    if (response.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new AiModelError('Gemini ran out of output tokens.');
+    return response.text;
   }
 }
 
