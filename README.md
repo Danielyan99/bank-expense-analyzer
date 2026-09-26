@@ -2,7 +2,9 @@
 
 **Bank statement analyzer: rules first, AI only where rules run out.** Upload a CSV export from your bank and get a spending dashboard. A deterministic rule engine categorizes every transaction it recognises. Only the leftovers, the local cafés and cryptic merchant codes, go to an LLM (Google Gemini on the free tier in the demo; Claude is also supported). Every row shows which step decided and why.
 
-> **Live demo:** _coming soon_ · uses a synthetic sample statement, so there is no need to upload real bank data.
+> **Live demo:** https://bank-expense-analyzer-web.vercel.app · **API health:** https://ledgerlens-api-ghz4.onrender.com/health
+>
+> The demo uses a synthetic sample statement, so there is no need to upload real bank data. The API runs on Render's free plan and sleeps when idle, so the first visit can take ~30 s to wake it.
 
 ---
 
@@ -16,7 +18,7 @@ So the pipeline puts the cheap, predictable step first:
 |---|---|---|
 | **Parse** | Finds the header row (skipping bank preambles), maps columns, detects the date format and the sign convention | 200 rows, 0 skipped, `MM/DD/YYYY` detected |
 | **Rules** | 360+ merchant names, keywords and money-flow patterns, plus a recurring-charge detector | **173 rows (87%)** in ~10 ms |
-| **AI** | Only the unresolved merchants, **each sent once**, in a single call with a strict JSON schema | 18 merchants |
+| **AI** | Only the unresolved merchants, **each sent once**, in a single call with a strict JSON schema | 18 merchants: 26 rows sorted, 1 answered "unknown" (Gemini) |
 | **You** | Change any category; the app offers to apply it to the same merchant | — |
 
 ## Highlights
