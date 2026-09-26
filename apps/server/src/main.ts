@@ -21,6 +21,7 @@ async function bootstrap() {
 
   await app.listen(config.port, '0.0.0.0');
   Logger.log(`Listening on :${config.port} · AI ${app.get(AiCategorizerService).description}`, 'Bootstrap');
+  Logger.log(`CORS allows: ${config.corsOrigins.join(', ')}`, 'Bootstrap');
 }
 
 void bootstrap();

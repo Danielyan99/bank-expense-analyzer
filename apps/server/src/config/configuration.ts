@@ -45,9 +45,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       geminiApiKey: env.GEMINI_API_KEY?.trim() || undefined,
       anthropicApiKey: env.ANTHROPIC_API_KEY?.trim() || undefined,
     },
+    // Browsers send the origin without a trailing slash; forgive one pasted from the address bar.
     corsOrigins: (env.CORS_ORIGIN ?? 'http://localhost:5173')
       .split(',')
-      .map((o) => o.trim())
+      .map((o) => o.trim().replace(/\/+$/, ''))
       .filter(Boolean),
     maxUploadBytes: int(env.MAX_UPLOAD_KB, 1024, 1) * 1024,
     rateLimitPerMinute: int(env.RATE_LIMIT_PER_MINUTE, 10, 1),

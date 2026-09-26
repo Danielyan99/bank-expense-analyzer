@@ -1,6 +1,13 @@
 import { createAiModel } from '../categorization/ai/create-ai-model';
 import { loadConfig } from './configuration';
 
+describe('CORS config', () => {
+  it('ignores trailing slashes and spaces pasted with the origin', () => {
+    const config = loadConfig({ CORS_ORIGIN: ' https://app.vercel.app/ , http://localhost:5173' });
+    expect(config.corsOrigins).toEqual(['https://app.vercel.app', 'http://localhost:5173']);
+  });
+});
+
 describe('AI provider config', () => {
   it('uses Gemini (free tier) by default', () => {
     const config = loadConfig({ GEMINI_API_KEY: 'g' });
